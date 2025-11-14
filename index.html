@@ -1073,62 +1073,85 @@
       state.lastActiveTime = Date.now();
     });
 
-    // ==================== タップで絵文字生成 ====================
+       // ==================== タップで絵文字生成 ====================
+    // [1] & [2] 絵文字の数を減らしつつ、動きにバリエーションを持たせる
     function createEmojiParticles(x, y) {
       const emojis = state.oshi === 'aya' 
         ? ['😍', '🥰', '😘', '💖', '💕', '💗', '💓', '💝', '⭐', '✨', '🌸', '🌺', '🎀', '👰', '💐', '🦋']
         : ['😎', '🤩', '😤', '🔥', '⚡', '💙', '💎', '✨', '💫', '⚡', '🌟', '💪', '🎸', '🤘', '👔', '🎩'];
       
-      const count = Math.floor(Math.random() * 3) + 4;
+      // 1回あたり 2〜4 個に削減（以前は 4〜6）
+      const count = Math.floor(Math.random() * 3) + 2;
+
       for (let i = 0; i < count; i++) {
+        // 上限を超えそうなら古いものを削って軽量化
+        if (emojiParticleCount >= MAX_EMOJI_PARTICLES) {
+          const oldest = document.querySelector('.emoji-particle');
+          if (oldest) {
+            oldest.remove();
+            emojiParticleCount--;
+          }
+        }
+
         const emoji = emojis[Math.floor(Math.random() * emojis.length)];
         const particle = document.createElement('div');
         particle.className = 'emoji-particle';
         particle.textContent = emoji;
         
-        const size = Math.floor(Math.random() * 51) + 20;
+        // サイズも少し控えめに（20〜50px）
+        const size = Math.floor(Math.random() * 31) + 20;
         particle.style.fontSize = size + 'px';
         
         const offsetX = (Math.random() - 0.5) * 120;
         const offsetY = (Math.random() - 0.5) * 120;
         particle.style.left = (x + offsetX) + 'px';
         particle.style.top = (y + offsetY) + 'px';
-        
+
+        // [2] ランダムなアニメーションパターンを選択
+        const patterns = ['float-up', 'float-curve-left', 'float-curve-right', 'float-zoom'];
+        const animationName = patterns[Math.floor(Math.random() * patterns.length)];
+        const duration = 1.8 + Math.random() * 0.9; // 1.8〜2.7秒
+        particle.style.animation = `${animationName} ${duration}s ease-out forwards`;
+
+        document.body.appendChild(particle);
+        emojiParticleCount++;
+
+        const life = 2100 + Math.random() * 900;
         setTimeout(() => {
-          document.body.appendChild(particle);
-          setTimeout(() => particle.remove(), 2500);
-        }, i * 50);
+          particle.remove();
+          emojiParticleCount--;
+        }, life);
       }
     }
 
     // タッチイベント
+    // [1] setIntervalをやめて、時間ベースで間引きして軽量化
     lightArea.addEventListener('touchstart', (e) => {
       e.preventDefault();
       state.isTouching = true;
       const touch = e.touches[0];
-      createEmojiParticles(touch.clientX, touch.clientY);
+      const now = Date.now();
+      if (now - lastEmojiTime > EMOJI_INTERVAL_MS) {
+        createEmojiParticles(touch.clientX, touch.clientY);
+        lastEmojiTime = now;
+      }
       state.lastActiveTime = Date.now();
-      
-      state.touchInterval = setInterval(() => {
-        if (state.isTouching && e.touches[0]) {
-          createEmojiParticles(e.touches[0].clientX, e.touches[0].clientY);
-        }
-      }, 250);
     });
 
     lightArea.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      if (state.isTouching && e.touches[0]) {
-        createEmojiParticles(e.touches[0].clientX, e.touches[0].clientY);
+      if (!state.isTouching) return;
+      const touch = e.touches[0];
+      const now = Date.now();
+      // 指を動かしたときも一定間隔でのみ生成
+      if (now - lastEmojiTime > EMOJI_INTERVAL_MS) {
+        createEmojiParticles(touch.clientX, touch.clientY);
+        lastEmojiTime = now;
       }
     });
 
     lightArea.addEventListener('touchend', () => {
       state.isTouching = false;
-      if (state.touchInterval) {
-        clearInterval(state.touchInterval);
-        state.touchInterval = null;
-      }
     });
 
     lightArea.addEventListener('click', (e) => {
